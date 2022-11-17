@@ -1,0 +1,26 @@
+// Copyright (c) 2022 Haofan Zheng
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
+enclave
+{
+	from "sgx_tstdc.edl" import *;
+
+	from "DecentEnclave/SgxEDL/decent_tkey_exchange.edl" import *;
+	from "DecentEnclave/SgxEDL/decent_attestation.edl" import *;
+	from "DecentEnclave/SgxEDL/sys_io.edl" import *;
+
+	trusted
+	{
+		/* define ECALLs here. */
+
+		public sgx_status_t ecall_decent_server_init(
+			uint64_t enclaveId,
+			[in] const sgx_spid_t* spidPtr,
+			[user_check] void* iasRequesterPtr
+		);
+
+	}; // trusted
+
+}; // enclave
