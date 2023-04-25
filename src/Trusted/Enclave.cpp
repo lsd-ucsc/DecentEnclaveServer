@@ -4,11 +4,15 @@
 // https://opensource.org/licenses/MIT.
 
 
+#include <DecentEnclave/Common/AesGcmPackager.hpp>
 #include <DecentEnclave/Common/Platform/Print.hpp>
+#include <DecentEnclave/Common/DecentCerts.hpp>
 #include <DecentEnclave/Common/Sgx/EpidRaSvcProv.hpp>
 #include <DecentEnclave/Common/Sgx/IasReportVerifier.hpp>
 #include <DecentEnclave/Common/Sgx/MbedTlsInit.hpp>
 
+#include <DecentEnclave/Trusted/PlatformId.hpp>
+#include <DecentEnclave/Trusted/SKeyring.hpp>
 #include <DecentEnclave/Trusted/Sgx/EnclaveIdentity.hpp>
 #include <DecentEnclave/Trusted/Sgx/EpidRaClient.hpp>
 #include <DecentEnclave/Trusted/Sgx/EpidSvcProvAuth.hpp>
@@ -16,10 +20,14 @@
 #include <DecentEnclave/Trusted/Sgx/Random.hpp>
 
 #include <mbedTLScpp/EcKey.hpp>
+#include <mbedTLScpp/X509Cert.hpp>
 
 #include <SimpleObjects/Internal/make_unique.hpp>
 
+#include "Certs.hpp"
 #include "Keys.hpp"
+
+#include "AppRequestHandler.hpp"
 
 
 using namespace DecentEnclave;
@@ -38,16 +46,78 @@ void GlobalInitialization()
 	// Initialize mbedTLS
 	MbedTlsInit::Init();
 
+	Trusted::SKeyring::GetMutableInstance(
+	).RegisterKey(
+		"TestSealKey", 128
+	).Lock();
+
 	// Register keys
 	DecentKey_Secp256r1::Register();
 	DecentKey_Secp256k1::Register();
+
+	// Register certificates
+	DecentCert_Secp256r1::Register();
+	DecentCert_Secp256k1::Register();
 
 	// Lock the keyring, since there is no other key to register
 	Keyring::GetInstance().GenKeyHashList();
 }
 
+void TestAesPackager(mbedTLScpp::RbgInterface& rand)
+{
+	using PlatformAesGcm = Platform::AesGcmOneGoNative<128>;
+	using Packager = Common::AesGcmPackager<PlatformAesGcm>;
+
+	const auto& key = Trusted::SKeyring::GetInstance().GetSKey<128>("TestSealKey");
+
+	Packager packager(key, 1024);
+
+	std::vector<uint8_t> encData;
+	std::array<uint8_t, 16> tag;
+
+	std::tie(encData, tag) = packager.Pack(
+		mbedTLScpp::CtnFullR(std::vector<uint8_t>({ 0x01U, })),
+		mbedTLScpp::CtnFullR(std::vector<uint8_t>({ 0x02U, })),
+		mbedTLScpp::CtnFullR(std::vector<uint8_t>({ 0x03U, })),
+		mbedTLScpp::CtnFullR(std::vector<uint8_t>({ /* 0x04U, */ })),
+		rand
+	);
+
+	if (
+		Packager::GetKeyMeta(encData) !=
+		std::vector<uint8_t>({ 0x01U, })
+	)
+	{
+		throw std::runtime_error("Key meta data is not correct!");
+	}
+
+	mbedTLScpp::SecretVector<uint8_t> decMeta;
+	mbedTLScpp::SecretVector<uint8_t> decData;
+
+	std::tie(decData, decMeta) = packager.Unpack(
+		mbedTLScpp::CtnFullR(encData),
+		mbedTLScpp::CtnFullR(std::vector<uint8_t>({ /* 0x04U, */ })),
+		&tag
+	);
+
+	if (decMeta != std::vector<uint8_t>({ 0x02U, }))
+	{
+		throw std::runtime_error("Decrypted meta data is not correct!");
+	}
+	if (decData != std::vector<uint8_t>({ 0x03U, }))
+	{
+		throw std::runtime_error("Decrypted data is not correct!");
+	}
+
+	Common::Platform::Print::StrDebug("AES packager test passed!");
+}
+
 void PrintMyInfo()
 {
+	Platform::Print::StrInfo(
+		"My platform ID is              : " + Trusted::PlatformId::GetIdHex()
+	);
+
 	const auto& selfHash = EnclaveIdentity::GetSelfHashHex();
 	std::string secp256r1KeyFp =
 		DecentKey_Secp256r1::GetInstance().GetKeySha256Hex();
@@ -69,21 +139,33 @@ void PrintMyInfo()
 	);
 }
 
-void Init(
-	uint64_t enclaveId,
+void PrintMyCerts()
+{
+	Platform::Print::StrInfo(
+		"My certificate (SECP256R1) :\n" +
+		DecentCert_Secp256r1::Fetch()->GetPem()
+	);
+
+	Platform::Print::StrInfo(
+		"My certificate (SECP256K1) :\n" +
+		DecentCert_Secp256k1::Fetch()->GetPem()
+	);
+}
+
+std::tuple<
+	IasReportSet,
+	std::vector<uint8_t> /* std report data */
+>
+SelfAttestation(
+	sgx_enclave_id_t enclaveId,
 	const sgx_spid_t& spid,
-	std::unique_ptr<Common::Sgx::IasRequester> iasRequester
+	std::unique_ptr<Common::Sgx::IasRequester> iasRequester,
+	mbedTLScpp::RbgInterface& rand
 )
 {
-	GlobalInitialization();
-
-	PrintMyInfo();
-
 	const auto& selfHash = EnclaveIdentity::GetSelfHash();
 	auto keyringHash = Keyring::GetInstance().GenHash();
 	std::vector<uint8_t> addRepData(keyringHash.cbegin(), keyringHash.cend());
-
-	RandGenerator rand;
 
 	std::unique_ptr<EpidSvcProvAuthAcceptAll> epidAuth =
 		SimpleObjects::Internal::make_unique<EpidSvcProvAuthAcceptAll>();
@@ -130,13 +212,74 @@ void Init(
 		(epidSvrCore.IsHandshakeRefused() ? "Refused" : "Unknown" ))
 	);
 
+	return std::make_tuple(
+		epidSvrCore.GetIasReportSet(),
+		std::vector<uint8_t>(
+			std::begin(epidSvrCore.GetEpidQuoteVerifier().GetStdReportData().d),
+			std::end(epidSvrCore.GetEpidQuoteVerifier().GetStdReportData().d)
+		)
+	);
+}
+
+void Init(
+	const sgx_spid_t& spid,
+	std::unique_ptr<Common::Sgx::IasRequester> iasRequester
+)
+{
+	GlobalInitialization();
+
+	PrintMyInfo();
+
+	RandGenerator rand;
+
+	TestAesPackager(rand);
+
+	IasReportSet iasReportSet;
+	std::vector<uint8_t> stdRepData;
+	std::tie(iasReportSet, stdRepData) = SelfAttestation(
+		Trusted::Sgx::SelfEnclaveId::Get(),
+		spid,
+		std::move(iasRequester),
+		rand
+	);
+
+	std::vector<uint8_t> selfRaRepRlp =
+		SimpleRlp::WriterGeneric::Write(iasReportSet);
+
+	std::shared_ptr<mbedTLScpp::X509Cert> certPtr;
+
+	certPtr = std::make_shared<mbedTLScpp::X509Cert>(
+		IssueSelfRaCert(
+			DecentKey_Secp256r1::GetKey(),
+			DecentKey_Secp256r1::GetInstance().GetName(),
+			EnclaveIdentity::GetSelfHashHex(),
+			stdRepData,
+			selfRaRepRlp,
+			rand
+		)
+	);
+	DecentCert_Secp256r1::Update(certPtr);
+
+	certPtr = std::make_shared<mbedTLScpp::X509Cert>(
+		IssueSelfRaCert(
+			DecentKey_Secp256k1::GetKey(),
+			DecentKey_Secp256k1::GetInstance().GetName(),
+			EnclaveIdentity::GetSelfHashHex(),
+			stdRepData,
+			selfRaRepRlp,
+			rand
+		)
+	);
+	DecentCert_Secp256k1::Update(certPtr);
+
+	PrintMyCerts();
+
 	Platform::Print::StrInfo("Decent Server Initialized");
 }
 
 } // namespace DecentEnclaveServer
 
 extern "C" sgx_status_t ecall_decent_server_init(
-	uint64_t enclaveId,
 	const sgx_spid_t* spidPtr,
 	void* iasRequesterPtr
 )
@@ -159,7 +302,6 @@ extern "C" sgx_status_t ecall_decent_server_init(
 	try
 	{
 		DecentEnclaveServer::Init(
-			enclaveId,
 			spid,
 			std::move(iasRequester)
 		);

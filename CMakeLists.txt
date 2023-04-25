@@ -14,7 +14,10 @@ project(DecentEnclaveServer LANGUAGES C CXX VERSION 0.0.1)
 ################################################################################
 
 if(MSVC)
-	set(COMMON_OPTIONS /W4 /WX /EHsc /MP /GR /Zc:__cplusplus)
+	set(COMMON_OPTIONS /W4 /WX /EHsc /MP /GR /Zc:__cplusplus
+		/wd4815 # Mitigate issue in SGXSDK about zero-sized array
+		/wd4310 # Mitigate issue in SGXSDK about cast truncates in #include <limits>
+	)
 	set(DEBUG_OPTIONS /MTd /Od /Zi /DDEBUG)
 	set(RELEASE_OPTIONS /MT /Ox /Oi /Ob2 /fp:fast)# /DNDEBUG
 #	set(CMAKE_EXE_LINKER_FLAGS_DEBUG ${CMAKE_EXE_LINKER_FLAGS_DEBUG} /DEBUG)
@@ -70,6 +73,14 @@ set(CMAKE_STATIC_LINKER_FLAGS_DEBUGSIMULATION ${CMAKE_STATIC_LINKER_FLAGS_DEBUG}
 
 include(FetchContent)
 
+## cppcodec
+FetchContent_Declare(
+	git_cppcodec
+	GIT_REPOSITORY https://github.com/tplgy/cppcodec.git
+	GIT_TAG        master
+)
+FetchContent_MakeAvailable(git_cppcodec)
+
 ## SimpleCMakeScripts
 FetchContent_Declare(
 	git_simplecmakescripts
@@ -119,13 +130,23 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(git_simplesysio)
 
-## EclipseMonitor
+## SimpleConcurrency
 FetchContent_Declare(
-	git_eclipsemonitor
-	GIT_REPOSITORY https://github.com/zhenghaven/EclipseMonitor.git
-	GIT_TAG        main
+	git_simpleconcurrency
+	GIT_REPOSITORY https://github.com/zhenghaven/SimpleConcurrency.git
+	GIT_TAG        dev
 )
-FetchContent_MakeAvailable(git_eclipsemonitor)
+FetchContent_MakeAvailable(git_simpleconcurrency)
+
+## SimpleBoostSelector
+set(SIMPLEBOOST_BOOST_VER 1.81.0 CACHE STRING "Boost version to use." FORCE)
+FetchContent_Declare(
+	git_simpleboostselector
+	GIT_REPOSITORY https://github.com/zhenghaven/SimpleBoostSelector.git
+	GIT_TAG        dev
+)
+FetchContent_MakeAvailable(git_simpleboostselector)
+simpleboost_enable_sublib(asio)
 
 ## DecentEnclave
 FetchContent_Declare(
@@ -161,41 +182,20 @@ FetchContent_Declare(
   GIT_TAG        decent-enclave
 )
 FetchContent_MakeAvailable(git_mbedtls)
-mbedTLScpp_UseMbedtlsHeaders_Normal(mbedcrypto)
-mbedTLScpp_UseMbedtlsHeaders_Normal(mbedx509)
-mbedTLScpp_UseMbedtlsHeaders_Normal(mbedtls)
-mbedTLScpp_UseMbedtlsHeaders_Enclave(mbedcrypto_enclave)
-mbedTLScpp_UseMbedtlsHeaders_Enclave(mbedx509_enclave)
-mbedTLScpp_UseMbedtlsHeaders_Enclave(mbedtls_enclave)
+mbedTLScpp_Decentize_Normal(mbedcrypto)
+mbedTLScpp_Decentize_Normal(mbedx509)
+mbedTLScpp_Decentize_Normal(mbedtls)
+mbedTLScpp_Decentize_Enclave(mbedcrypto_enclave)
+mbedTLScpp_Decentize_Enclave(mbedx509_enclave)
+mbedTLScpp_Decentize_Enclave(mbedtls_enclave)
 set(MBEDTLS_INCLUDE_DIRS ${MBEDTLS_DIR}/include/)
 set(MBEDCRYPTO_LIBRARY mbedcrypto)
 set(MBEDX509_LIBRARY mbedx509)
 set(MBEDTLS_LIBRARY mbedtls)
 
-## cppcodec
-FetchContent_Declare(
-	git_cppcodec
-	GIT_REPOSITORY https://github.com/tplgy/cppcodec.git
-	GIT_TAG        master
-)
-FetchContent_MakeAvailable(git_cppcodec)
-
-## cppcodec
-set(BUILD_CURL_EXE OFF CACHE BOOL "Set to ON to build CURL executable." FORCE)
-set(BUILD_TESTING OFF CACHE BOOL "Set to ON to build libcurl test libraries." FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
-set(CURL_ENABLE_EXPORT_TARGET OFF CACHE BOOL "to enable cmake export target" FORCE)
-set(CURL_STATICLIB ON CACHE BOOL "Set to ON to build libcurl with static linking." FORCE)
-if (MSVC)
-	set(CURL_STATIC_CRT ON CACHE BOOL "Set to ON to build libcurl with static CRT on Windows (/MT)." FORCE)
-endif()
-set(CURL_ZLIB OFF CACHE BOOL "Set to ON to enable building curl with zlib support." FORCE)
-set(CURL_USE_MBEDTLS ON CACHE BOOL "Set to ON to build libcurl with MbedTLS." FORCE)
-set(CURL_USE_LIBSSH2 OFF CACHE BOOL "Set to ON to enable building curl with libSSH2 support." FORCE)
-set(CURL_USE_OPENSSL OFF CACHE BOOL "Set to ON to build libcurl with OpenSSL." FORCE)
-set(HTTP_ONLY ON CACHE BOOL "Set to ON to build libcurl with only http functionalities." FORCE)
-set(ENABLE_MANUAL OFF CACHE BOOL "Set to ON to build libcurl manual." FORCE)
-set(ENABLE_UNIX_SOCKETS OFF CACHE BOOL "Define if you want Unix domain sockets support" FORCE)
+## curl
+include(SimpleCUrlConfig)
+simple_curl_https_pre_configuration()
 FetchContent_Declare(
 	git_curl
 	GIT_REPOSITORY https://github.com/curl/curl.git
