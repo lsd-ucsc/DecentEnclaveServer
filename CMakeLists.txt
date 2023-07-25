@@ -73,13 +73,6 @@ set(CMAKE_STATIC_LINKER_FLAGS_DEBUGSIMULATION ${CMAKE_STATIC_LINKER_FLAGS_DEBUG}
 
 include(FetchContent)
 
-## cppcodec
-FetchContent_Declare(
-	git_cppcodec
-	GIT_REPOSITORY https://github.com/tplgy/cppcodec.git
-	GIT_TAG        master
-)
-FetchContent_MakeAvailable(git_cppcodec)
 
 ## SimpleCMakeScripts
 FetchContent_Declare(

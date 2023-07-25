@@ -18,8 +18,8 @@
 #include <DecentEnclave/Trusted/Sgx/LaResponder.hpp>
 #include <DecentEnclave/Trusted/Sgx/Random.hpp>
 #include <mbedTLScpp/X509Req.hpp>
+#include <SimpleObjects/Codec/Hex.hpp>
 #include <SimpleObjects/Internal/make_unique.hpp>
-#include <SimpleObjects/ToString.hpp>
 
 
 void DecentEnclaveServer::HandleAppCertRequest(
@@ -92,12 +92,8 @@ void DecentEnclaveServer::HandleAppCertRequest(
 	// Send App certificate and CA certificate
 	secSocket->SizedSendBytes(appCert.GetPem()); //caCert->GetPem() +
 
-	std::string peerHashHex;
-	SimpleObjects::Internal::BytesToHEX<false, char>(
-		std::back_inserter(peerHashHex),
-		peerHash.begin(),
-		peerHash.end()
-	);
+	std::string peerHashHex = SimpleObjects::Codec::HEX::
+		template Encode<std::string>(peerHash);
 	DecentEnclave::Common::Platform::Print::StrInfo(
 		"App certificate issued to " + peerHashHex + " with key " + keyName
 	);
