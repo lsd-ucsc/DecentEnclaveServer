@@ -61,31 +61,42 @@ extern "C" void SignalHandler(int sig)
 
 
 int main(int argc, char* argv[]) {
-	(void)argc;
-	(void)argv;
+	std::string configPath;
+	if (argc == 1)
+	{
+		configPath = "../../src/components_config.json";
+	}
+	else if (argc == 2)
+	{
+		configPath = argv[1];
+	}
+	else
+	{
+		Common::Platform::Print::StrErr("Unexpected number of arguments.");
+		Common::Platform::Print::StrErr(
+			"Only the path to the components configuration file is needed."
+		);
+		return -1;
+	}
 
 	// Init MbedTLS
 	Common::Sgx::MbedTlsInit::Init();
 
 	// Read in components config
-	auto configFile = SimpleSysIO::SysCall::RBinaryFile::Open(
-		"../../src/components_config.json"
-	);
+	auto configFile = SimpleSysIO::SysCall::RBinaryFile::Open(configPath);
 	auto configJson = configFile->ReadBytes<std::string>();
 	auto config = SimpleJson::LoadStr(configJson);
 	std::vector<uint8_t> authListAdvRlp = Config::ConfigToAuthListAdvRlp(config);
 
 	// SPID and IAS Requester with IAS subscription key
-	sgx_spid_t spid =
-		Sgx::IasRequesterImpl::ParseSpid(
-			""
-		);
+	const auto& iasConfig = config.AsDict()[String("IAS")].AsDict();
+	std::string iasUrl = iasConfig[String("Url")].AsString().c_str();
+	std::string spidHex = iasConfig[String("SPID")].AsString().c_str();
+	std::string subKey = iasConfig[String("SubscriptionKey")].AsString().c_str();
+	sgx_spid_t spid = Sgx::IasRequesterImpl::ParseSpid(spidHex);
 
 	std::unique_ptr<Sgx::IasRequesterImpl> iasReq =
-		Internal::make_unique<Sgx::IasRequesterImpl>(
-			Sgx::IasRequesterImpl::GetIasUrlDev(),
-			""
-		);
+		Internal::make_unique<Sgx::IasRequesterImpl>(iasUrl, subKey);
 
 	// Create thread pool
 	std::shared_ptr<ThreadPool> threadPool =
@@ -108,8 +119,16 @@ int main(int argc, char* argv[]) {
 	);
 
 	// DecentServer
-	std::shared_ptr<DecentServer> enclave =
-		std::make_shared<DecentServer>(spid, std::move(iasReq), authListAdvRlp);
+	const auto& imgConfig = config.AsDict()[String("EnclaveImage")].AsDict();
+	std::string imgPath = imgConfig[String("ImagePath")].AsString().c_str();
+	std::string tokenPath = imgConfig[String("TokenPath")].AsString().c_str();
+	std::shared_ptr<DecentServer> enclave = std::make_shared<DecentServer>(
+		spid,
+		std::move(iasReq),
+		authListAdvRlp,
+		imgPath,
+		tokenPath
+	);
 
 
 	// Setup Lambda call handlers and start to run multi-threaded-ly

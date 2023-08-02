@@ -1,0 +1,23 @@
+{
+	"EnclaveImage": {
+		"ImagePath": "libDecentEnclaveServer_trusted.signed.so",
+		"TokenPath": "DecentEnclaveServer_Enclave.token"
+	},
+	"AuthorizedComponents": {
+		"0000000000000000000000000000000000000000000000000000000000000000" : {
+			"Name": "DecentServer",
+			"Endpoints" : {
+				"Inst1" : {
+					"IP": "0.0.0.0",
+					"Port": 10001,
+					"Incoming": true
+				}
+			}
+		}
+	},
+	"IAS": {
+		"Url": "https://api.trustedservices.intel.com/sgx/dev",
+		"SPID": "",
+		"SubscriptionKey": ""
+	}
+}
