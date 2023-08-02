@@ -9,6 +9,7 @@ enclave
 
 	from "DecentEnclave/SgxEDL/decent_tkey_exchange.edl" import *;
 	from "DecentEnclave/SgxEDL/decent_attestation.edl" import *;
+	from "DecentEnclave/SgxEDL/net_io.edl" import *;
 	from "DecentEnclave/SgxEDL/sys_io.edl" import *;
 
 	trusted

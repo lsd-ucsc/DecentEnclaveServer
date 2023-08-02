@@ -12,8 +12,9 @@ decent_enclave_print_config_sgx()
 
 decent_enclave_add_target_sgx(DecentEnclaveServer
 	UNTRUSTED_SOURCE
-		${DECENTENCLAVE_INCLUDE}/DecentEnclave/SgxEdgeSources/SysIO_u.cpp
 		${DECENTENCLAVE_INCLUDE}/DecentEnclave/SgxEdgeSources/Attestation_u.cpp
+		${DECENTENCLAVE_INCLUDE}/DecentEnclave/SgxEdgeSources/NetIO_u.cpp
+		${DECENTENCLAVE_INCLUDE}/DecentEnclave/SgxEdgeSources/SysIO_u.cpp
 		${CMAKE_CURRENT_LIST_DIR}/Untrusted/Main.cpp
 	UNTRUSTED_DEF
 		DECENTENCLAVE_DEV_LEVEL_0
@@ -40,6 +41,7 @@ decent_enclave_add_target_sgx(DecentEnclaveServer
 		Boost::asio
 	TRUSTED_SOURCE
 		${DECENTENCLAVE_INCLUDE}/DecentEnclave/SgxEdgeSources/decent_tkey_exchange.cpp
+		${DECENTENCLAVE_INCLUDE}/DecentEnclave/SgxEdgeSources/AppLambdaHandler_t.cpp
 		${DECENTENCLAVE_INCLUDE}/DecentEnclave/SgxEdgeSources/Attestation_t.cpp
 		${DECENTENCLAVE_INCLUDE}/DecentEnclave/SgxEdgeSources/Crypto_t.cpp
 		${DECENTENCLAVE_INCLUDE}/DecentEnclave/SgxEdgeSources/SysIO_t.cpp
