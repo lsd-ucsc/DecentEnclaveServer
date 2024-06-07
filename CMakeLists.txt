@@ -172,7 +172,7 @@ endif()
 FetchContent_Declare(
   git_mbedtls
   GIT_REPOSITORY https://github.com/zhenghaven/mbedtls.git
-  GIT_TAG        decent-enclave
+  GIT_TAG        decent-enclave-v3.5.2
 )
 FetchContent_MakeAvailable(git_mbedtls)
 mbedTLScpp_Decentize_Normal(mbedcrypto)
