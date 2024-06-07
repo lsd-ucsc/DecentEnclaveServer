@@ -255,6 +255,7 @@ void Init(
 			EnclaveIdentity::GetSelfHashHex(),
 			stdRepData,
 			selfRaRepRlp,
+			Trusted::PlatformId::GetId(),
 			rand
 		)
 	);
@@ -267,6 +268,7 @@ void Init(
 			EnclaveIdentity::GetSelfHashHex(),
 			stdRepData,
 			selfRaRepRlp,
+			Trusted::PlatformId::GetId(),
 			rand
 		)
 	);
